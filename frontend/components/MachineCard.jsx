@@ -9,10 +9,12 @@ tool_wear,
 }) {
 return (
     <div className="p-4 bg-white rounded-xl shadow hover:shadow-md transition border border-gray-200">
-    <h3 className="font-semibold text-lg">{name}</h3>
-    <p className="text-sm text-gray-500 mb-3">Status: {status}</p>
+        <h3 className="font-semibold text-lg">{name}</h3>
+        <p className="text-sm text-gray-500 mb-3">
+        Status: <span className={`font-semibold ${status === 'Failure Risk' ? 'text-red-500' : status === 'Warning' ? 'text-yellow-500' : 'text-green-500'}`}>{status}</span>
+        </p>
 
-    <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
+    <div className="grid grid-cols-2 gap-y-3 gap-x-4 mt-3 text-sm">
         <div>
             <p className="text-gray-600">Air Temp</p>
             <p className="font-semibold">{air_temperature}°C</p>
@@ -33,7 +35,7 @@ return (
             <p className="font-semibold">{torque} Nm</p>
         </div>
 
-        <div>
+        <div className="col-span-2"> 
             <p className="text-gray-600">Tool Wear</p>
             <p className="font-semibold">{tool_wear}</p>
         </div>
