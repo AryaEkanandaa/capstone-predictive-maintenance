@@ -41,78 +41,29 @@ export default function Dashboard() {
     }
   };
 
-  // fetch prediction history
-  const fetchPredictions = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/predict/history`, {
-        method: "GET",
-        headers: getAuthHeaders(),
-      });
-      const json = await res.json();
-      setPredictions(Array.isArray(json.data) ? json.data : []);
-    } catch (err) {
-      console.error("Error fetching predictions:", err);
-    }
-  };
+return (
+    <div className="p-4 md:p-6"> 
+        <h2 className="text-xl font-bold mb-4">Machine Overview</h2>
 
-  useEffect(() => {
-    // initial load
-    setLoading(true);
-    Promise.all([fetchLatestAll(), fetchPredictions()]).finally(() => setLoading(false));
-
-    // polling untuk latest machines agar realtime feel
-    const interval = setInterval(() => {
-      fetchLatestAll();
-    }, POLL_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // jika MachineCard mengharapkan props berbeda, ubah mapping di sini.
-  // Contoh mapping sederhana (jika backend mengembalikan kolom raw):
-  const mappedMachines = machines.map((m, idx) => {
-    // m bisa null jika belum ada data untuk mesin tertentu
-    if (!m) return { id: `empty-${idx}`, machine_id: idx + 1, empty: true };
-
-    return {
-      id: m.id ?? `${m.machine_id}-${m.created_at}`,
-      machineId: m.machine_id ?? m.machineId ?? m.machine_id,
-      airTemperature: m.air_temperature ?? m.airTemperature,
-      processTemperature: m.process_temperature ?? m.processTemperature,
-      rotationalSpeed: m.rotational_speed ?? m.rotationalSpeed,
-      torque: m.torque,
-      toolWear: m.tool_wear ?? m.toolWear,
-      timestamp: m.created_at ?? m.createdAt,
-    };
-  });
-
-  return (
-    <div className="p-6">
-      <h2 className="text-xl font-bold mb-4">Machine Overview</h2>
-
-      {loading ? (
-        <div>Loading…</div>
-      ) : (
-        <div className="grid grid-cols-3 gap-6">
-          {mappedMachines.map((machine) => (
-            <MachineCard key={machine.id} {...machine} />
-          ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+        {machines.map(machine => (
+        <MachineCard key={machine.id} {...machine} />
+        ))}
         </div>
-      )}
 
-      <div className="mt-10 p-6 bg-white rounded-xl shadow border border-gray-200">
+        <div className="mt-8 md:mt-10 p-4 md:p-6 bg-white rounded-xl shadow border border-gray-200"> 
         <h3 className="text-lg font-semibold mb-4">Prediction</h3>
 
-        <div className="grid grid-cols-3 gap-4">
-          {predictions.length > 0 ? (
-            predictions.map((p) => (
-              <PredictionCard key={p.id ?? `${p.created_at}`} {...p} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+            {predictions.length > 0 ? (
+            predictions.map(p => (
+                <PredictionCard key={p.id} {...p} />
             ))
           ) : (
             <p className="text-gray-600">No predictions available.</p>
-          )}
+            )}
         </div>
       </div>
     </div>
-  );
+    );
 }
