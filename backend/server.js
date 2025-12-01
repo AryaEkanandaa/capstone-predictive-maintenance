@@ -1,19 +1,39 @@
-const express = require('express');
-const app = express();
-const PORT = 5000;
+// backend/server.js
+import "./src/config/env.js";
+import app from "./src/app.js";
+import { pool } from "./src/db/db.js";
+import sensorService from "./src/services/sensor/sensorService.js";
 
-const anomalyRoutes = require('./routes/anomalyRoutes'); 
-const authRoutes = require('./routes/auth/authRoutes');
+const PORT = process.env.PORT || 5000;
 
-app.use(express.json());
+const startServer = async () => {
+  try {
+    // Test DB connection
+    await pool.query("SELECT NOW()");
+    console.log("PostgreSQL connected successfully");
 
-app.use('/api', anomalyRoutes);
-app.use('/api/auth', authRoutes);
+    // Start Express server
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
 
-app.get('/', (req, res) => {
-    res.status(200).send('Predictive Maintenance Copilot Backend API is running!');
-});
+    // Real-time sensor simulation (non-blocking)
+    const intervalMs = 3000; // ms, ubah sesuai kebutuhan
+    console.log(`Real-time sensor simulation started (${intervalMs} ms interval)`);
 
-app.listen(PORT, () => {
-    console.log(`Server berjalan di http://localhost:${PORT}`);
-});
+    setInterval(async () => {
+      try {
+        const inserted = await sensorService.autoGenerateAllMachines();
+        console.log(`[SENSOR] Generated ${inserted.length} machine data`);
+      } catch (err) {
+        console.error("[SENSOR ERROR]", err.message);
+      }
+    }, intervalMs);
+
+  } catch (error) {
+    console.error("Failed to start server:", error.message);
+    process.exit(1);
+  }
+};
+
+startServer();

@@ -1,21 +1,32 @@
 {
-  "name": "backend",
+  "name": "predictive-maintenance-backend",
   "version": "1.0.0",
-  "description": "",
+  "description": "Backend for Predictive Maintenance Capstone",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "migrate": "node-pg-migrate"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "node-pg-migrate": {
+    "databaseUrl": {
+      "ENV": "DATABASE_URL"
+    },
+    "dir": "migrations",
+    "migrationsTable": "pgmigrations",
+    "checkOrder": false
+  },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
     "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "node-pg-migrate": "^8.0.3",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
+    "dotenv": "^17.2.3",
     "nodemon": "^3.1.11"
   }
 }
