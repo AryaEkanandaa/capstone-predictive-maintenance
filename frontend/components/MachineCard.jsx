@@ -8,20 +8,21 @@ export default function MachineCard({
   tool_wear,
   timestamp,
 }) {
-  // Tentukan warna status
-  const statusClass =
-    status === "Normal"
-      ? "text-green-600"
-      : status === "Warning"
-      ? "text-yellow-600"
-      : "text-red-600";
-
   return (
-    <div className="p-5 bg-white rounded-xl shadow border border-gray-200 hover:shadow-md transition">
+    <div className="p-5 bg-white rounded-xl shadow hover:shadow-md transition border border-gray-200">
       {/* Header */}
       <div className="flex justify-between items-center mb-2">
         <h3 className="font-bold text-lg">{name || "Unknown Machine"}</h3>
-        <span className={`text-sm font-semibold ${statusClass}`}>
+
+        <span
+          className={`text-sm font-semibold ${
+            status === "Failure Risk"
+              ? "text-red-500"
+              : status === "Warning"
+              ? "text-yellow-500"
+              : "text-green-500"
+          }`}
+        >
           {status || "Unknown"}
         </span>
       </div>
