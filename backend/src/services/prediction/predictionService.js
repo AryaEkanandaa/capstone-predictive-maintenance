@@ -1,24 +1,26 @@
-import { pool } from "../../db/db.js";
-import { runFailurePrediction } from "../modelService.js";
+// backend/src/services/prediction/predictionService.js
+import fetch from "node-fetch";
 
-export const predictAndSave = async (payload) => {
-  const result = await runFailurePrediction(payload);
+export async function runFailurePrediction(payload) {
+  const mlUrl = process.env.ML_API_URL || "http://localhost:8001/predict";
 
-  const saved = await pool.query(
-    `
-    INSERT INTO prediction_logs (failure_probability)
-    VALUES ($1)
-    RETURNING *
-    `,
-    [result.failureProbability]
-  );
+  const res = await fetch(mlUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 
-  return { ...result, saved: saved.rows[0] };
-};
+  const data = await res.json();
 
-export const getHistory = async () => {
-  const r = await pool.query(`
-    SELECT * FROM prediction_logs ORDER BY created_at DESC
-  `);
-  return r.rows;
-};
+  if (!res.ok) {
+    const err = new Error("ML server error");
+    err.detail = data;
+    throw err;
+  }
+
+  return {
+    predicted_failure: data.predicted_failure ?? data.failure_label ?? "Unknown",
+    confidence: typeof data.confidence === "number" ? data.confidence : (data.confidence ?? 0),
+    raw: data
+  };
+}

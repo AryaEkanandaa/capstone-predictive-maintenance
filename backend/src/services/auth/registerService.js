@@ -1,30 +1,34 @@
-import bcrypt from "bcryptjs";
+// src/services/auth/registerService.js
 import { pool } from "../../db/db.js";
+import bcrypt from "bcryptjs";
+
+function generateUsername(full_name) {
+  const base = full_name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return base + Math.floor(Math.random() * 9999);
+}
 
 class RegisterService {
-  async execute({ email, password, full_name }) {
-    const hashed = await bcrypt.hash(password, 10);
+  async execute({ full_name, email, password }) {
+    if (!full_name || !email || !password)
+      throw new Error("full_name, email, password wajib diisi");
 
-    const userRes = await pool.query(
-      `
-      INSERT INTO users (email, password, role)
-      VALUES ($1, $2, $3)
-      RETURNING id, email, role
-      `,
-      [email, hashed, "engineer"]
+    const check = await pool.query(`SELECT id FROM users WHERE email=$1`, [email]);
+    if (check.rowCount) throw new Error("Email sudah terdaftar");
+
+    const hash = await bcrypt.hash(password, 10);
+    const username = generateUsername(full_name);
+
+    const userDB = await pool.query(
+      `INSERT INTO users(full_name,username,email,password)
+       VALUES ($1,$2,$3,$4)
+       RETURNING id,full_name,username,email,created_at`,
+      [full_name, username, email, hash]
     );
 
-    const user = userRes.rows[0];
-
-    await pool.query(
-      `
-      INSERT INTO user_profiles (user_id, full_name)
-      VALUES ($1, $2)
-      `,
-      [user.id, full_name]
-    );
-
-    return user;
+    return {
+      message: "Register berhasil",
+      user: userDB.rows[0]
+    };
   }
 }
 

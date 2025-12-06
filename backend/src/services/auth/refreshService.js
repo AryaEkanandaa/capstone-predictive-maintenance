@@ -1,23 +1,40 @@
-import jwt from "jsonwebtoken";
 import { pool } from "../../db/db.js";
-import { generateAccessToken } from "../../utils/tokenGenerator.js";
+import { generateAccessToken, generateRefreshToken } from "../../utils/tokenGenerator.js";
+import { hashToken } from "../../utils/hashToken.js";
+import jwt from "jsonwebtoken";
+import jwtConfig from "../../config/jwt.js";
 
 class RefreshService {
   async execute(refreshToken) {
-    const stored = await pool.query(
-      `SELECT * FROM refresh_tokens WHERE token = $1`,
-      [refreshToken]
+    if (!refreshToken) throw new Error("Refresh token diperlukan");
+
+    // 🔥 verify dulu tokennya valid
+    const data = jwt.verify(refreshToken, jwtConfig.refreshSecret);
+
+    // 🔥 hash token yang dikirim user lalu cocokkan dengan DB
+    const hashed = hashToken(refreshToken);
+
+    const find = await pool.query(
+      `SELECT * FROM refresh_tokens WHERE user_id=$1 AND token=$2`,
+      [data.id, hashed]
     );
 
-    if (stored.rowCount === 0) {
-      throw new Error("Refresh token tidak valid");
-    }
+    if (!find.rowCount) throw new Error("Refresh token tidak cocok (expired/diakses dari device lain)");
 
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    // 🔥 token rotation → generate refresh token baru
+    const newRefresh = generateRefreshToken({ id: data.id });
+    const newHash = hashToken(newRefresh);
 
-    const newAccessToken = generateAccessToken({ id: decoded.id });
+    await pool.query(`DELETE FROM refresh_tokens WHERE user_id=$1`, [data.id]);
+    await pool.query(`INSERT INTO refresh_tokens(user_id, token) VALUES ($1,$2)`, [data.id, newHash]);
 
-    return { accessToken: newAccessToken };
+    // 🔥 generate access baru
+    const newAccess = generateAccessToken({ id: data.id });
+
+    return {
+      accessToken: newAccess,
+      refreshToken: newRefresh, // kirim kembali rotating token
+    };
   }
 }
 

@@ -1,3 +1,4 @@
+// src/controllers/auth/loginController.js
 import loginService from "../../services/auth/loginService.js";
 
 class LoginController {
@@ -5,12 +6,15 @@ class LoginController {
     try {
       const result = await loginService.execute(req.body);
 
-      res.json({
+      return res.json({
         message: "Login berhasil",
-        ...result,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        user: result.user,
       });
+
     } catch (err) {
-      res.status(400).json({ error: err.message });
+      return res.status(400).json({ error: err.message });
     }
   }
 }

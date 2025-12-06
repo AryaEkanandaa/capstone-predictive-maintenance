@@ -1,10 +1,8 @@
+// backend/src/services/sensor/sensorService.js
 import { pool } from "../../db/db.js";
 import { generateSensorForMachine, getMachineCount } from "./sensorGenerator.js";
 
-/* ================================
-   REALTIME GENERATION
-   ================================ */
-
+/* REALTIME GENERATION */
 export const autoGenerateAllMachines = async () => {
   const machineCount = getMachineCount();
   const results = [];
@@ -18,10 +16,7 @@ export const autoGenerateAllMachines = async () => {
   return results;
 };
 
-/* ================================
-   SAVE SENSOR LOG
-   ================================ */
-
+/* SAVE SENSOR LOG */
 export const saveSensorLog = async (payload) => {
   const {
     machine_id,
@@ -36,7 +31,7 @@ export const saveSensorLog = async (payload) => {
     INSERT INTO sensor_logs
       (machine_id, air_temperature, process_temperature, rotational_speed, torque, tool_wear)
     VALUES ($1,$2,$3,$4,$5,$6)
-    RETURNING *;
+    RETURNING *
   `;
 
   const r = await pool.query(q, [
@@ -48,13 +43,30 @@ export const saveSensorLog = async (payload) => {
     toolWear,
   ]);
 
-  return r.rows[0];
+  const saved = r.rows[0];
+
+  // Emit socket event for sensor update
+  try {
+    const io = globalThis._io;
+    if (io) {
+      io.emit("sensor:update", {
+        machine_id: saved.machine_id,
+        air_temperature: saved.air_temperature,
+        process_temperature: saved.process_temperature,
+        rotational_speed: saved.rotational_speed,
+        torque: saved.torque,
+        tool_wear: saved.tool_wear,
+        created_at: saved.created_at
+      });
+    }
+  } catch (e) {
+    console.error("Socket emit error (saveSensorLog)", e);
+  }
+
+  return saved;
 };
 
-/* ================================
-   LATEST SENSOR
-   ================================ */
-
+/* LATEST SENSOR */
 export const getLatestByMachine = async (machine_id) => {
   const r = await pool.query(
     `
@@ -81,10 +93,7 @@ export const getLatestAll = async () => {
   return result;
 };
 
-/* ================================
-   SENSOR HISTORY
-   ================================ */
-
+/* SENSOR HISTORY */
 export const getSensorHistory = async ({
   page = 1,
   limit = 50,
@@ -97,13 +106,11 @@ export const getSensorHistory = async ({
   const filters = [];
   const values = [];
 
-  // filter mesin
   if (machine_id) {
     values.push(machine_id);
     filters.push(`machine_id = $${values.length}`);
   }
 
-  // filter tanggal
   if (date_from) {
     values.push(date_from);
     filters.push(`created_at >= $${values.length}`);
@@ -114,15 +121,8 @@ export const getSensorHistory = async ({
     filters.push(`created_at <= $${values.length}`);
   }
 
-  // filter range
   if (range) {
-    const map = {
-      "1h": "1 hour",
-      "24h": "1 day",
-      "7d": "7 days",
-      "30d": "30 days",
-    };
-
+    const map = { "1h": "1 hour", "24h": "1 day", "7d": "7 days", "30d": "30 days" };
     if (map[range]) {
       filters.push(`created_at >= NOW() - INTERVAL '${map[range]}'`);
     }
@@ -155,10 +155,7 @@ export const getSensorHistory = async ({
   };
 };
 
-/* ================================
-   STATS (PER MACHINE)
-   ================================ */
-
+/* STATS (PER MACHINE) */
 export const getSensorStats = async (machine_id) => {
   const r = await pool.query(
     `
