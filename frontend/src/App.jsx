@@ -26,7 +26,7 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="/dashboard" />} />
+          <Route index element={<Navigate to="/login" />} />
 
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="history" element={<PredictionHistory />} />

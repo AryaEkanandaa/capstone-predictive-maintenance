@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import MaintenanceForm from "../components/MaintenanceForm";
+
 const API = import.meta.env.VITE_API_BASE;
 
 export default function MaintenanceLogbook() {
@@ -13,13 +15,13 @@ export default function MaintenanceLogbook() {
     status_before: "",
     status_after: ""
   });
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   const headers = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${token}`
   };
 
-  /** 🔥 Auto isi nama teknisi dari token */
   useEffect(() => {
     try {
       const decode = JSON.parse(atob(token.split(".")[1]));
@@ -27,17 +29,28 @@ export default function MaintenanceLogbook() {
     } catch {
       console.warn("Token decode failed");
     }
-  }, []);
+  }, [token]); 
 
-  /** Fetch log */
   const loadLogs = async () => {
-    const res = await fetch(`${API}/maintenance/history/${form.machine_id}`, { headers });
-    const json = await res.json();
-    setLogs(json.data || []);
+    setLoadingHistory(true);
+    try {
+      const res = await fetch(`${API}/maintenance/history/${form.machine_id}`, { headers });
+      const json = await res.json();
+      setLogs(json.data || []);
+    } catch (e) {
+      console.error("Failed to load logs", e);
+      setLogs([]);
+    } finally {
+      setLoadingHistory(false);
+    }
   };
 
-  /** Submit */
   const submitLog = async () => {
+    if (!form.action_taken || !form.status_before || !form.status_after) {
+        alert("Action Taken dan Status harus diisi.");
+        return;
+    }
+    
     await fetch(`${API}/maintenance/log`, {
       method: "POST",
       headers,
@@ -55,93 +68,85 @@ export default function MaintenanceLogbook() {
     loadLogs();
   };
 
-  useEffect(() => { loadLogs(); }, [form.machine_id]);
+  useEffect(() => { loadLogs(); }, [form.machine_id]); 
 
+  const getStatusClasses = (status) => {
+    switch(status) {
+        case 'CRITICAL':
+            return 'bg-red-500 text-white';
+        case 'WARNING':
+            return 'bg-yellow-500 text-gray-900';
+        case 'NORMAL':
+            return 'bg-green-500 text-white';
+        default:
+            return 'bg-gray-300 text-gray-800';
+    }
+  };
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-6">🛠 Maintenance Logbook</h2>
+    <div className="p-6 min-h-screen bg-gray-50">
+      <h2 className="text-3xl font-extrabold text-gray-900 mb-8">
+        🛠 Maintenance Logbook Management
+      </h2>
 
-      {/* ========== FORM ========== */}
-      <div className="grid gap-3 mb-8 bg-white p-4 rounded shadow w-full sm:w-2/3 lg:w-1/2">
-
-        {/* PILIH MESIN */}
-        <label className="font-semibold">Machine:</label>
-        <select
-          className="border p-2"
-          value={form.machine_id}
-          onChange={e=>setForm({...form, machine_id:Number(e.target.value)})}
-        >
-          {[1,2,3,4,5].map(id => <option key={id} value={id}>Machine {id}</option>)}
-        </select>
-
-        {/* TEKNISI - READ ONLY */}
-        <label className="font-semibold">Technician:</label>
-        <input
-          className="border p-2 bg-gray-100"
-          value={form.technician}
-          readOnly
-        />
-
-        <label className="font-semibold">Action Taken:</label>
-        <input
-          className="border p-2"
-          placeholder="Contoh: Ganti bearing, pelumasan ulang..."
-          value={form.action_taken}
-          onChange={e=>setForm({...form,action_taken:e.target.value})}
-        />
-
-        <label className="font-semibold">Notes (optional):</label>
-        <textarea
-          className="border p-2"
-          placeholder="Catatan tambahan teknisi..."
-          value={form.notes}
-          onChange={e=>setForm({...form,notes:e.target.value})}
-        />
-
-        <label className="font-semibold">Previous Status:</label>
-        <select
-          className="border p-2"
-          value={form.status_before}
-          onChange={e=>setForm({...form,status_before:e.target.value})}
-        >
-          <option value="">Select status</option>
-          <option value="CRITICAL">CRITICAL</option>
-          <option value="WARNING">WARNING</option>
-          <option value="NORMAL">NORMAL</option>
-        </select>
-
-        <label className="font-semibold">Fixed to Status:</label>
-        <select
-          className="border p-2"
-          value={form.status_after}
-          onChange={e=>setForm({...form,status_after:e.target.value})}
-        >
-          <option value="">Pilih status</option>
-          <option value="NORMAL">NORMAL</option>
-          <option value="WARNING">WARNING</option>
-        </select>
-
-        <button
-          className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded font-semibold"
-          onClick={submitLog}
-        >
-          Save Maintenance Log
-        </button>
+      <div className="mb-10 max-w-4xl mx-auto">
+          <MaintenanceForm 
+              form={form} 
+              setForm={setForm} 
+              submitLog={submitLog} 
+          />
       </div>
 
-      {/* ========== LIST HISTORY ========== */}
-      <h3 className="text-xl font-semibold mb-2">Riwayat Maintenance</h3>
-      {logs.map((log,i)=>(
-        <div key={i} className="border p-4 rounded mb-2 bg-gray-50 shadow-sm">
-          <p><b>{log.technician}</b> — {log.action_taken}</p>
-          <small>{new Date(log.created_at).toLocaleString()}</small><br/>
-          <span className="text-xs text-gray-600">
-            Status: {log.status_before} → <b>{log.status_after}</b>
-          </span>
-          {log.notes && <p className="text-xs italic mt-1">{log.notes}</p>}
+
+      <div className="max-w-4xl mx-auto">
+        <h3 className="text-2xl font-semibold text-gray-800 mb-4 border-b pb-2">
+          Riwayat Maintenance Mesin {form.machine_id}
+        </h3>
+        
+        {loadingHistory && <p className="text-center text-indigo-600 py-6">Memuat riwayat...</p>}
+        {!loadingHistory && logs.length === 0 && (
+            <div className="bg-white p-6 rounded-lg shadow-sm text-center text-gray-500">
+                Belum ada riwayat maintenance untuk mesin ini.
+            </div>
+        )}
+
+        <div className="space-y-4">
+            {logs.map((log,i)=>(
+                <div 
+                    key={i} 
+                    className="bg-white p-5 rounded-lg shadow hover:shadow-md transition duration-200 border-l-4 border-indigo-600"
+                >
+                    <div className="flex justify-between items-start mb-2">
+                        <div>
+                            <p className="text-lg font-bold text-gray-900">{log.action_taken}</p>
+                            <p className="text-sm text-gray-600">Oleh: <span className="font-semibold">{log.technician}</span></p>
+                        </div>
+
+                        <small className="text-gray-400 text-xs flex-shrink-0 ml-4">
+                            {new Date(log.created_at).toLocaleString()}
+                        </small>
+                    </div>
+
+                    <div className="flex items-center space-x-3 mt-2">
+                        <span className="text-sm font-medium text-gray-700">Status:</span>
+                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusClasses(log.status_before)}`}>
+                            {log.status_before}
+                        </span>
+                        <span className="text-lg font-bold text-gray-500">→</span>
+                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusClasses(log.status_after)}`}>
+                            {log.status_after}
+                        </span>
+                    </div>
+                    
+                    {log.notes && (
+                        <p className="text-sm italic text-gray-500 mt-3 border-t pt-2">
+                            Catatan: {log.notes}
+                        </p>
+                    )}
+                </div>
+            ))}
         </div>
-      ))}
+      </div>
     </div>
   );
 }

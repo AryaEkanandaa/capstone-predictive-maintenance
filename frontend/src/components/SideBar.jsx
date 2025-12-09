@@ -1,9 +1,14 @@
-import { Home, MessageSquare, History, ClipboardList } from "lucide-react";
+import { Home, MessageSquare, History, ClipboardList, LogOut } from "lucide-react"; 
 import { useNavigate, useLocation } from "react-router-dom";
 
 export default function Sidebar() {
   const nav = useNavigate();
   const loc = useLocation();
+
+  const handleLogout = () => {
+    localStorage.removeItem('accessToken'); 
+    nav('/login'); 
+  };
 
   const items = [
     { name: "Dashboard", icon: Home, to: "/dashboard" },
@@ -24,7 +29,7 @@ export default function Sidebar() {
               onClick={() => nav(i.to)}
               key={i.name}
               className={`flex items-center gap-3 p-3 rounded-lg transition
-                ${active ? "bg-indigo-600" : "hover:bg-gray-700"}`}
+                ${active ? "bg-indigo-600 font-semibold" : "hover:bg-gray-700"}`} 
             >
               <i.icon size={20} />
               {i.name}
@@ -32,6 +37,16 @@ export default function Sidebar() {
           );
         })}
       </nav>
+
+      <div className="mt-auto pt-6 border-t border-gray-700"> 
+        <button 
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-3 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200"
+        >
+            <LogOut size={20} />
+            Logout
+        </button>
+      </div>
     </div>
   );
 }
