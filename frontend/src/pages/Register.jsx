@@ -1,85 +1,57 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import RegisterForm from "../components/RegisterForm"; 
 
 export default function Register() {
-  const navigate = useNavigate();
-  const [form, setForm] = useState({
-    full_name: "",
-    email: "",
-    password: "",
-  });
-
-  const handleChange = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    const res = await fetch("http://localhost:5000/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form), // ⛔ tanpa username!
+    const navigate = useNavigate();
+    const [form, setForm] = useState({
+        full_name: "",
+        email: "",
+        password: "",
     });
+    const [error, setError] = useState("");
 
-    const json = await res.json();
+    const handleChange = (e) =>
+        setForm({ ...form, [e.target.name]: e.target.value });
 
-    if (json.error) {
-      alert("Register gagal: " + json.error);
-    } else {
-      alert("Register berhasil! Silakan cek email untuk verifikasi ✔");
-      navigate("/login");
-    }
-  };
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError("");
 
-  return (
-    <div className="p-8 max-w-md mx-auto">
-      <h2 className="text-xl font-bold mb-4">Register</h2>
+        const dataToSend = form; 
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+        try {
+            const res = await fetch("http://localhost:5000/api/auth/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(dataToSend), 
+            });
+    
+            const json = await res.json();
+    
+            if (json.error) {
+                setError(json.error || "Register gagal. Coba lagi.");
+            } else {
+                alert("Register berhasil! Silakan cek email untuk verifikasi ✔");
+                navigate("/login");
+            }
+        } catch (err) {
+            setError("Gagal terhubung ke server.");
+            console.error("Register error:", err);
+        }
+    };
 
-        {/* Full Name */}
-        <input
-          name="full_name"
-          placeholder="Full Name"
-          className="border p-2 w-full"
-          onChange={handleChange}
-          required
-        />
+    return (
+        <div className="relative h-screen flex items-center justify-center bg-[#0a0f18] text-white overflow-hidden">
+            <div className="absolute inset-0 z-0 opacity-20" style={{ backgroundImage: 'radial-gradient(circle at center, #3f4770 0%, #0a0f18 70%)' }}></div>
+            <div className="absolute inset-0 z-0" style={{ backgroundImage: 'linear-gradient(to top, rgba(0,0,0,0.5), rgba(0,0,0,0))' }}></div>
 
-        {/* Email */}
-        <input
-          name="email"
-          type="email"
-          placeholder="Email"
-          className="border p-2 w-full"
-          onChange={handleChange}
-          required
-        />
-
-        {/* Password */}
-        <input
-          type="password"
-          name="password"
-          placeholder="Password"
-          className="border p-2 w-full"
-          onChange={handleChange}
-          required
-        />
-
-        <button className="bg-blue-600 text-white p-2 rounded w-full">
-          Register
-        </button>
-      </form>
-
-      <p className="mt-4 text-sm">
-        Sudah punya akun?{" "}
-        <button
-          className="text-blue-600 underline"
-          onClick={() => navigate("/login")}
-        >
-          Login
-        </button>
-      </p>
-    </div>
-  );
+            <RegisterForm
+                form={form}
+                handleChange={handleChange}
+                handleSubmit={handleSubmit}
+                error={error}
+            />
+        </div>
+    );
 }

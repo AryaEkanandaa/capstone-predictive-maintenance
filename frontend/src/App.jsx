@@ -5,8 +5,6 @@ import Chatbot from "./pages/Chatbot";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import PredictionHistory from "./pages/PredictionHistory";
-
-// 🔥 Tambahkan halaman baru
 import MaintenanceLogbook from "./pages/MaintenanceLogbook";
 
 export default function App() {
@@ -25,7 +23,7 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="/dashboard" />} />
+          <Route index element={<Navigate to="/login" />} />
 
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="chatbot" element={<Chatbot />} />
