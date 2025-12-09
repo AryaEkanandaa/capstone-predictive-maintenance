@@ -5,7 +5,6 @@ import {
   createSession,
   getSession,
   listMessages,
-  createMessage,
   deleteMessage
 } from "../controllers/chatHistoryController.js";
 
@@ -21,9 +20,8 @@ router.get("/sessions", listSessions);
 router.post("/sessions", createSession);
 router.get("/sessions/:sessionId", getSession);
 
-// messages
+// messages (read + delete only)
 router.get("/sessions/:sessionId/messages", listMessages);
-router.post("/sessions/:sessionId/messages", createMessage);
 router.delete("/sessions/:sessionId/messages/:messageId", deleteMessage);
 
 export default router;

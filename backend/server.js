@@ -4,12 +4,15 @@ import app from "./src/app.js";
 import { pool } from "./src/db/db.js";
 import sensorService from "./src/services/sensor/sensorService.js";
 import { autoPredictAllMachines } from "./src/services/prediction/autoPredictionService.js";
+import { autoAnomalyMonitor } from "./src/services/prediction/autoAnomalyService.js";
 
 import http from "http";
 import { Server as IOServer } from "socket.io";
 import jwt from "jsonwebtoken";
 import jwtConfig from "./src/config/jwt.js"; 
 const PORT = process.env.PORT || 5000;
+
+console.log("GEMINI KEY:", process.env.GEMINI_API_KEY);
 
 async function startServer() {
   try {
@@ -86,6 +89,18 @@ async function startServer() {
     console.error("❌ Failed to start server:", err);
     process.exit(1);
   }
+
+  const ANOMALY_INTERVAL = Number(process.env.ANOMALY_INTERVAL_MS) || 5000;
+console.log(`Anomaly Monitor active every ${ANOMALY_INTERVAL}ms`);
+
+setInterval(async () => {
+  try {
+    const detected = await autoAnomalyMonitor();
+    if (detected > 0) console.log(`[ANOMALY] Scanned ${detected} machines`);
+  } catch (err) {
+    console.error("[AUTO-ANOMALY ERROR]", err);
+  }
+}, ANOMALY_INTERVAL);
 }
 
 startServer();
