@@ -1,4 +1,4 @@
-import { Home, MessageSquare, History, ClipboardList, LogOut } from "lucide-react"; // Import LogOut icon
+import { Home, MessageSquare, History, ClipboardList, LogOut } from "lucide-react"; 
 import { useNavigate, useLocation } from "react-router-dom";
 
 export default function Sidebar() {
