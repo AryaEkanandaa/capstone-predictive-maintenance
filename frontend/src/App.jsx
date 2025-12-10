@@ -7,6 +7,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import PredictionHistory from "./pages/PredictionHistory";
 import MaintenanceLogbook from "./pages/MaintenanceLogbook";
+import TrendPage from "./pages/TrendPage";
 
 export default function App() {
   return (
@@ -18,7 +19,7 @@ export default function App() {
         <Route path="/register" element={<Register />} />
 
         {/* Semua halaman yang memakai sidebar */}
-        <Route 
+        <Route
           path="/"
           element={
             <ProtectedRoute>
@@ -31,6 +32,9 @@ export default function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="history" element={<PredictionHistory />} />
           <Route path="logbook" element={<MaintenanceLogbook />} />
+          <Route path="/trend" element={<TrendPage />} />
+
+
 
           {/* 🔥 Chatbot di sini, jadi sidebar tetap ada */}
           <Route path="chatbot" element={<Chatbot />} />

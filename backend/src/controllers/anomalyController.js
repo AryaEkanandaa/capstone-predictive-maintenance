@@ -1,63 +1,69 @@
-// ===============================
-// 🔥 ANOMALY CONTROLLER (Final)
-// ===============================
-import fetch from "node-fetch";
-import { pool } from "../db/db.js";
+// backend/src/controllers/anomalyController.js
+import { runAnomalyDetection, saveAnomaly } from "../services/anomaly/anomalyService.js";
 
+/**
+ * POST /api/anomaly
+ * Body: { Type, air_temp, process_temp, rpm, torque, tool_wear, machine_id (optional) }
+ */
 export const detectAnomaly = async (req, res, next) => {
   try {
-    const payload = req.body; // { Type, air_temp, process_temp, rpm, torque, tool_wear }
+    const payload = req.body;
+    const result = await runAnomalyDetection(payload);
 
-    // ==============================
-    // 🔥 Kirim Data ke FastAPI /anomaly
-    // ==============================
-    const mlURL = process.env.ML_ANOMALY_URL || "http://localhost:8001/anomaly";
-
-    const response = await fetch(mlURL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+    const saved = await saveAnomaly({
+      machine_id: payload.machine_id ?? null,
+      type: payload.Type ?? "M",
+      air_temp: payload.air_temp ?? null,
+      process_temp: payload.process_temp ?? null,
+      rpm: payload.rpm ?? null,
+      torque: payload.torque ?? null,
+      tool_wear: payload.tool_wear ?? null,
+      is_anomaly: result.is_anomaly,
+      score: result.score,
+      status: result.status,
+      raw: result.raw,
     });
 
-    const data = await response.json();
+    globalThis._io?.emit("anomaly:update", {
+      machine_id: saved.machine_id,
+      is_anomaly: saved.is_anomaly,
+      score: saved.score,
+      status: saved.status,
+      timestamp: saved.created_at,
+    });
 
-    if (!response.ok) {
-      return res.status(500).json({
-        status: "failed",
-        message: "❌ Anomaly API error",
-        detail: data
-      });
-    }
-
-    const isAnomaly = data.is_anomaly ? true : false;
-    const status = data.status ?? (isAnomaly ? "WARNING" : "NORMAL");
-
-    // ==============================
-    // 💾 Simpan ke Database anomaly_logs
-    // ==============================
-    await pool.query(
-      `INSERT INTO anomaly_logs (is_anomaly, score, status)
-       VALUES ($1,$2,$3)`,
-      [isAnomaly, data.score || null, status]
-    );
-
-    // ==============================
-    // 🔥 Response ke Frontend
-    // ==============================
     return res.json({
       status: "success",
-      message: "Anomaly detection complete",
-      data: {
-        is_anomaly: isAnomaly,
-        score: data.score ?? null,
-        status: status,
-        input: payload,
-        model_info: data.metadata ?? {}
-      }
+      data: saved,
     });
-
   } catch (err) {
-    console.error("[ANOMALY ERROR]", err);
     next(err);
   }
+};
+
+export const getAnomalyMachines = async (req, res) => {
+  try {
+    const q = await pool.query(`
+      SELECT DISTINCT ON(machine_id)
+        machine_id, score, is_anomaly, created_at
+      FROM anomaly_logs
+      WHERE is_anomaly=true
+      ORDER BY machine_id, created_at DESC;
+    `);
+
+    res.json({
+      success: true,
+      count: q.rowCount,
+      data: q.rows
+    });
+
+  } catch (error) {
+    console.error("[ANOMALY_FETCH_ERROR]", error);
+    res.status(500).json({ error: "Gagal mengambil data anomaly mesin" });
+  }
+};
+
+export default {
+  detectAnomaly,
+  getAnomalyMachines,
 };

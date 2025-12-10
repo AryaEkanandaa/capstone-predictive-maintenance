@@ -22,6 +22,6 @@ router.use("/health", verifyAuth, healthRoutes);
 router.use("/maintenance", verifyAuth, maintenanceRoutes);
 
 // 🔥 CHAT BARU DENGAN DB (bukan /ask lagi)
-router.use("/chat", verifyAuth, chatRoutes);
-
+// router.use("/chat", verifyAuth, chatRoutes);
+router.use("/chat", chatRoutes);
 export default router;

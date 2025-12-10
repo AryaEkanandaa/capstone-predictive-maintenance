@@ -1,13 +1,15 @@
-// backend/src/services/sensor/sensorService.js
 import { pool } from "../../db/db.js";
-import { generateSensorForMachine, getMachineCount } from "./sensorGenerator.js";
+import { generateSensorForMachine, getMachineCount as getCount } from "./sensorGenerator.js";
 
-/* REALTIME GENERATION */
+export function getMachineCount() {
+  return getCount();
+}
+
 export const autoGenerateAllMachines = async () => {
-  const machineCount = getMachineCount();
+  const count = getMachineCount();
   const results = [];
 
-  for (let id = 1; id <= machineCount; id++) {
+  for (let id = 1; id <= count; id++) {
     const data = generateSensorForMachine(id);
     const saved = await saveSensorLog(data);
     results.push(saved);
@@ -16,7 +18,6 @@ export const autoGenerateAllMachines = async () => {
   return results;
 };
 
-/* SAVE SENSOR LOG */
 export const saveSensorLog = async (payload) => {
   const {
     machine_id,
@@ -45,28 +46,21 @@ export const saveSensorLog = async (payload) => {
 
   const saved = r.rows[0];
 
-  // Emit socket event for sensor update
-  try {
-    const io = globalThis._io;
-    if (io) {
-      io.emit("sensor:update", {
-        machine_id: saved.machine_id,
-        air_temperature: saved.air_temperature,
-        process_temperature: saved.process_temperature,
-        rotational_speed: saved.rotational_speed,
-        torque: saved.torque,
-        tool_wear: saved.tool_wear,
-        created_at: saved.created_at
-      });
-    }
-  } catch (e) {
-    console.error("Socket emit error (saveSensorLog)", e);
+  if (globalThis._io) {
+    globalThis._io.emit("sensor:update", {
+      ...saved,
+      Type: payload.Type,
+      rpm: payload.rpm,
+      tool_wear: saved.tool_wear,
+      air_temp: saved.air_temperature,
+      process_temp: saved.process_temperature
+    });
   }
 
   return saved;
 };
 
-/* LATEST SENSOR */
+
 export const getLatestByMachine = async (machine_id) => {
   const r = await pool.query(
     `
@@ -93,15 +87,7 @@ export const getLatestAll = async () => {
   return result;
 };
 
-/* SENSOR HISTORY */
-export const getSensorHistory = async ({
-  page = 1,
-  limit = 50,
-  date_from,
-  date_to,
-  machine_id,
-  range,
-}) => {
+export const getSensorHistory = async ({ page = 1, limit = 200, date_from, date_to, machine_id, range }) => {
   const offset = (page - 1) * limit;
   const filters = [];
   const values = [];
@@ -155,31 +141,47 @@ export const getSensorHistory = async ({
   };
 };
 
-/* STATS (PER MACHINE) */
-export const getSensorStats = async (machine_id) => {
+export const getPreviousSensorReading = async (machine_id) => {
   const r = await pool.query(
     `
-    SELECT 
-      AVG(air_temperature)::numeric(10,2) AS avgTemp,
-      MIN(air_temperature) AS minTemp,
-      MAX(air_temperature) AS maxTemp,
-      AVG(torque)::numeric(10,2) AS avgTorque,
-      MAX(rotational_speed) AS maxSpeed,
-      COUNT(*) AS dataPoints
+    SELECT *
     FROM sensor_logs
     WHERE machine_id = $1
+    ORDER BY created_at DESC
+    OFFSET 1 LIMIT 1
     `,
     [machine_id]
   );
+  return r.rows[0] || null;
+};
 
-  return r.rows[0];
+export const getMachineTrend = async (machine_id, range = "24h") => {
+
+  // SUPPORT: Xm, Xh, Xd → 5m, 30m, 1h, 12h, 7d, 30d
+  if (!/^\d+(m|h|d)$/i.test(range)) {
+    throw new Error("Invalid range. Format valid: Xm / Xh / Xd  → contoh: 5m, 30m, 2h, 1d, 7d");
+  }
+
+  return await pool.query(
+    `
+    SELECT machine_id, air_temperature, process_temperature, rotational_speed,
+           torque, tool_wear, created_at
+    FROM sensor_logs
+    WHERE machine_id = $1
+      AND created_at >= NOW() - INTERVAL '${range}'
+    ORDER BY created_at ASC
+    `,
+    [machine_id]
+  );
 };
 
 export default {
-  autoGenerateAllMachines,
   saveSensorLog,
-  getLatestAll,
   getLatestByMachine,
+  getLatestAll,
   getSensorHistory,
-  getSensorStats,
+  getPreviousSensorReading,
+  getMachineCount,
+  autoGenerateAllMachines,
+  getMachineTrend,
 };

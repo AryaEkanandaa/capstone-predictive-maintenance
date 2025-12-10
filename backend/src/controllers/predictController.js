@@ -1,17 +1,10 @@
+// backend/src/controllers/predictController.js
 import { pool } from "../db/db.js";
-import { runFailurePrediction } from "../services/prediction/predictionService.js";
-
-function getStatus(label, prob) {
-  if (label === "No Failure") return "NORMAL";
-  if (prob >= 0.8) return "CRITICAL";
-  if (prob >= 0.4) return "WARNING";
-  return "NORMAL";
-}
+import { runFailurePrediction, mapStatus, savePrediction } from "../services/prediction/predictionService.js";
 
 export const predictFailure = async (req, res, next) => {
   try {
     const payload = req.body;
-
     const required = ["Type", "air_temp", "process_temp", "rpm", "torque", "tool_wear"];
     for (const key of required) {
       if (payload[key] === undefined) {
@@ -19,62 +12,45 @@ export const predictFailure = async (req, res, next) => {
       }
     }
 
-    const prediction = await runFailurePrediction(payload);
+    const result = await runFailurePrediction(payload);
+    const status = mapStatus(result.predicted_failure, result.confidence);
     const machineId = payload.machine_id ?? null;
 
-    const status = getStatus(prediction.predicted_failure, prediction.confidence);
-
-    const insertQ = `
-      INSERT INTO prediction_logs (machine_id, failure_type, failure_probability, status)
-      VALUES ($1, $2, $3, $4)
-      RETURNING created_at
-    `;
-
-    const insert = await pool.query(insertQ, [
-      machineId,
-      prediction.predicted_failure,
-      prediction.confidence,
-      status
-    ]);
-
-    const createdAt = insert.rows[0]?.created_at ?? new Date().toISOString();
+    const saved = await savePrediction({
+      machine_id: machineId,
+      predicted_failure: result.predicted_failure,
+      confidence: result.confidence,
+      status,
+      raw: result.raw,
+    });
 
     globalThis._io?.emit("prediction:update", {
       machine_id: machineId,
-      failure_type: prediction.predicted_failure,
-      failure_probability: prediction.confidence,
-      status,
-      timestamp: createdAt
+      failure_type: saved.failure_type,
+      failure_probability: saved.failure_probability,
+      status: saved.status,
+      timestamp: saved.created_at,
     });
 
-    return res.json({
-      status: "success",
-      data: { ...prediction, status }
-    });
-
+    return res.json({ status: "success", data: saved });
   } catch (err) {
     next(err);
   }
 };
 
 export const getPredictionHistory = async (req, res) => {
-  const r = await pool.query(`
-    SELECT * FROM prediction_logs
-    ORDER BY created_at DESC LIMIT 200
-  `);
-
-  res.json({ success:true, data:r.rows });
+  const r = await pool.query(`SELECT * FROM prediction_logs ORDER BY created_at DESC LIMIT 200`);
+  res.json({ success: true, data: r.rows });
 };
 
-export const getLatestPredictionPerMachine = async (req,res)=>{
+export const getLatestPredictionPerMachine = async (req, res) => {
   const r = await pool.query(`
     SELECT DISTINCT ON (machine_id)
       machine_id, failure_type, failure_probability, status, created_at
     FROM prediction_logs
     ORDER BY machine_id, created_at DESC
   `);
-
-  res.json({ success:true, data:r.rows });
+  res.json({ success: true, data: r.rows });
 };
 
 export const getPredictionHistoryByMachine = async (req, res) => {
@@ -88,14 +64,30 @@ export const getPredictionHistoryByMachine = async (req, res) => {
   if (range === "7d") filter += " AND created_at >= NOW() - INTERVAL '7 days'";
   if (status !== "ALL") filter += ` AND status='${status}'`;
 
-  const r = await pool.query(`
-    SELECT * FROM prediction_logs
-    WHERE machine_id=$1 ${filter}
-    ORDER BY created_at DESC
-    LIMIT 200
-  `,[id]);
+  const r = await pool.query(
+    `SELECT * FROM prediction_logs WHERE machine_id=$1 ${filter} ORDER BY created_at DESC LIMIT 200`,
+    [id]
+  );
 
   res.json({ data: r.rows });
+};
+
+export const getMachineByStatus = async (req, res) => {
+  const status = req.params.status.toUpperCase();
+
+  if (!["CRITICAL", "WARNING", "NORMAL"].includes(status)) {
+    return res.status(400).json({ error: "Status harus NORMAL/WARNING/CRITICAL" });
+  }
+
+  const q = await pool.query(`
+    SELECT DISTINCT ON(machine_id)
+      machine_id, failure_type, failure_probability, status, created_at
+    FROM prediction_logs
+    WHERE status='${status}'
+    ORDER BY machine_id, created_at DESC;
+  `);
+
+  res.json({ status, count: q.rowCount, data: q.rows });
 };
 
 
@@ -104,4 +96,5 @@ export default {
   getPredictionHistory,
   getLatestPredictionPerMachine,
   getPredictionHistoryByMachine,
+  getMachineByStatus,
 };

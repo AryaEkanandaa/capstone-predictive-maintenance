@@ -38,6 +38,33 @@ const getHistory = async (req, res, next) => {
   }
 };
 
+const getTrend = async (req, res, next) => {
+  try {
+    const { machine_id } = req.params;
+    const range = req.query.range || "24h"; // default 24 jam
+
+    const trend = await sensorService.getMachineTrend(machine_id, range);
+
+    if (!trend || trend.rowCount === 0) {
+      return res.json({
+        status: "no-data",
+        message: `Tidak ada data trend untuk mesin ${machine_id} pada range ${range}`
+      });
+    }
+
+    res.json({
+      status: "success",
+      machine_id,
+      range,
+      points: trend.rowCount,
+      trend: trend.rows
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
 const addLog = async (req, res, next) => {
   try {
     const saved = await sensorService.saveSensorLog(req.body);
@@ -57,4 +84,5 @@ export default {
   getLatestByMachine,
   getHistory,
   addLog,
+  getTrend,
 };
