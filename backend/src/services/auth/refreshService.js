@@ -8,10 +8,8 @@ class RefreshService {
   async execute(refreshToken) {
     if (!refreshToken) throw new Error("Refresh token diperlukan");
 
-    // 🔥 verify dulu tokennya valid
     const data = jwt.verify(refreshToken, jwtConfig.refreshSecret);
 
-    // 🔥 hash token yang dikirim user lalu cocokkan dengan DB
     const hashed = hashToken(refreshToken);
 
     const find = await pool.query(
@@ -19,21 +17,37 @@ class RefreshService {
       [data.id, hashed]
     );
 
-    if (!find.rowCount) throw new Error("Refresh token tidak cocok (expired/diakses dari device lain)");
+    if (!find.rowCount) {
+      throw new Error("Refresh token tidak cocok / expired / digunakan pada device lain");
+    }
 
-    // 🔥 token rotation → generate refresh token baru
-    const newRefresh = generateRefreshToken({ id: data.id });
+    const newRefresh = generateRefreshToken({
+      id: data.id,
+      role: data.role
+    });
+
     const newHash = hashToken(newRefresh);
 
-    await pool.query(`DELETE FROM refresh_tokens WHERE user_id=$1`, [data.id]);
-    await pool.query(`INSERT INTO refresh_tokens(user_id, token) VALUES ($1,$2)`, [data.id, newHash]);
+    const result = await pool.query(
+      `UPDATE refresh_tokens SET token=$1 WHERE user_id=$2`,
+      [newHash, data.id]
+    );
 
-    // 🔥 generate access baru
-    const newAccess = generateAccessToken({ id: data.id });
+    if (result.rowCount === 0) {
+      await pool.query(
+        `INSERT INTO refresh_tokens (user_id, token) VALUES ($1, $2)`,
+        [data.id, newHash]
+      );
+    }
+
+    const newAccess = generateAccessToken({
+      id: data.id,
+      role: data.role
+    });
 
     return {
       accessToken: newAccess,
-      refreshToken: newRefresh, // kirim kembali rotating token
+      refreshToken: newRefresh
     };
   }
 }

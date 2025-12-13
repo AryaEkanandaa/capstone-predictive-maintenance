@@ -1,387 +1,256 @@
 import { pool } from "../db/db.js";
-import { chatToN8N } from "./chatAiController.js";
-import { buildChatPrompt } from "../prompts/promptChat.js";
+import { orchestrateChat, validateMessage } from "../services/agent/agentOrchestrator.js";
+import { getAgentHealth } from "../services/agent/langchainAgent.js";
 
 import {
-  getLatestByMachine as getLatestMachineData,
-  getLatestAll as getAllLatestMachineData,
-  getMachineTrend,
-} from "../services/sensor/sensorService.js";
+  detectTicketRequest,
+  extractUserNotes,
+  handleTicketCreation,
+} from "../services/agent/tools/ticketTool.js";
 
-import { getLatestPrediction } from "../services/prediction/predictionService.js";
-import { getLatestAnomaly } from "../services/anomaly/anomalyService.js";
-import { getTrendResponse } from "../services/chat/chatTrendService.js";
-import { getMachineSnapshot } from "../services/chat/chatMachineSnapshot.js";
-
-
-// ================================
-// 🔧 Helper: JSON ➜ Markdown
-// ================================
-function capitalize(str = "") {
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-function jsonToMarkdown(data, level = 0) {
-  if (data == null) return "–";
-  if (["string", "number", "boolean"].includes(typeof data)) return String(data);
-
-  if (Array.isArray(data)) {
-    if (!data.length) return "–";
-    return data.map(v => `- ${jsonToMarkdown(v, level + 1)}`).join("\n");
-  }
-
-  if (typeof data === "object") {
-    return Object.entries(data)
-      .map(([k, v]) => {
-        const label = capitalize(k.replace(/_/g, " "));
-        const title = level === 0 ? `### ${label}` : `**${label}**`;
-        const body = jsonToMarkdown(v, level + 1);
-        return `${title}\n\n${body}`;
-      })
-      .join("\n\n");
-  }
-
-  return String(data);
-}
-
-function extractAndConvertJsonBlock(text) {
-  if (!text) return text;
-
-  const trimmed = text.trim();
-  const fence = trimmed.match(/```json([\s\S]*?)```/i);
-
-  if (fence) {
-    try {
-      return jsonToMarkdown(JSON.parse(fence[1]));
-    } catch {
-      return text;
-    }
-  }
-
-  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-    try {
-      return jsonToMarkdown(JSON.parse(trimmed));
-    } catch {
-      return text;
-    }
-  }
-
-  return text;
-}
-
-function ensureHeading(reply) {
-  if (!reply) return "";
-  const first = reply.trim().split("\n")[0];
-  if (/^#+\s/.test(first)) return reply;
-  return "## Jawaban Teknisi\n\n" + reply;
-}
-
-
-// =============================================================
-// 1) Get list of sessions
-// =============================================================
+// GET CHAT SESSIONS
 export const getSessions = async (req, res) => {
   try {
     const { userId } = req.query;
-    const r = await pool.query(
-      `SELECT * FROM chat_sessions WHERE user_id=$1 ORDER BY updated_at DESC`,
+
+    if (!userId) {
+      return res.status(400).json({ message: "userId required" });
+    }
+
+    const result = await pool.query(
+      `SELECT * FROM chat_sessions
+       WHERE user_id = $1
+       ORDER BY updated_at DESC`,
       [userId]
     );
-    res.json(r.rows);
-  } catch {
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Get Sessions Error:", error);
     res.status(500).json({ message: "Gagal mengambil session" });
   }
 };
 
-
-// =============================================================
-// 🔥 Long-Term Memory
-// =============================================================
-async function getLongTermMemory(userId) {
-  const q = await pool.query(
-    `SELECT summary FROM chat_memory WHERE user_id=$1 LIMIT 1`,
-    [userId]
-  );
-  return q.rows[0]?.summary || null;
-}
-
-async function saveLongTermMemory(userId, text) {
-  const exist = await pool.query(
-    `SELECT id FROM chat_memory WHERE user_id=$1`,
-    [userId]
-  );
-
-  if (exist.rowCount === 0) {
-    await pool.query(
-      `INSERT INTO chat_memory (user_id,summary) VALUES ($1,$2)`,
-      [userId, text]
-    );
-  } else {
-    await pool.query(
-      `UPDATE chat_memory SET summary=$2,last_update=NOW() WHERE user_id=$1`,
-      [userId, text]
-    );
-  }
-}
-
-async function summarizeHistory(history, userId) {
-  const result = await chatToN8N(
-    `Ringkas poin penting ini menjadi memory permanen:\n\n${history}`,
-    userId
-  );
-  await saveLongTermMemory(userId, result);
-}
-
-
-// =============================================================
-// 2) Create new session
-// =============================================================
+// CREATE NEW CHAT SESSION
 export const createSession = async (req, res) => {
   try {
     const { userId, title } = req.body;
 
-    const r = await pool.query(
-      `INSERT INTO chat_sessions (user_id,title)
-       VALUES ($1,$2) RETURNING *`,
+    if (!userId) {
+      return res.status(400).json({ message: "userId required" });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO chat_sessions (user_id, title)
+       VALUES ($1, $2)
+       RETURNING *`,
       [userId, title || "Chat Baru"]
     );
 
-    res.json(r.rows[0]);
-  } catch {
-    res.status(500).json({ message: "Gagal membuat sesi" });
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("Create Session Error:", error);
+    res.status(500).json({ message: "Gagal membuat session" });
   }
 };
 
-
-// =============================================================
-// 3) Get messages
-// =============================================================
+// LOAD MESSAGES
 export const getMessages = async (req, res) => {
   try {
-    const r = await pool.query(
+    const { id } = req.params;
+
+    const result = await pool.query(
       `SELECT * FROM chat_messages
-       WHERE session_id=$1 AND is_deleted=false
+       WHERE session_id = $1 AND is_deleted = false
        ORDER BY created_at ASC`,
-      [req.params.id]
+      [id]
     );
 
-    res.json(r.rows);
-  } catch {
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Get Messages Error:", error);
     res.status(500).json({ message: "Gagal mengambil pesan" });
   }
 };
 
+export const deleteSession = async (req, res) => {
+  try {
+    const { id } = req.params;
 
-// =============================================================
-// 4) SEND MESSAGE (AI + ML + Memory + TREND)
-// =============================================================
+    if (!id) {
+      return res.status(400).json({ message: "session id required" });
+    }
+
+    // Soft delete messages
+    await pool.query(
+      `UPDATE chat_messages
+       SET is_deleted = true
+       WHERE session_id = $1`,
+      [id]
+    );
+
+    // Delete session
+    await pool.query(
+      `DELETE FROM chat_sessions
+       WHERE id = $1`,
+      [id]
+    );
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Delete Session Error:", error);
+    return res.status(500).json({ message: "Gagal menghapus session" });
+  }
+};
+
+// SEND MESSAGE (SIMPLE MODE)
 export const sendMessage = async (req, res) => {
   try {
     const { session_id, message, userId } = req.body;
 
-    // Rename session automatically (judul = pesan pertama)
-    const count = await pool.query(
-      `SELECT COUNT(*) FROM chat_messages WHERE session_id=$1`,
-      [session_id]
-    );
-    if (Number(count.rows[0].count) === 0) {
-      await pool.query(
-        `UPDATE chat_sessions SET title=$1 WHERE id=$2`,
-        [message.slice(0, 40), session_id]
-      );
+    // Basic validation
+    const validation = validateMessage(message);
+    if (!validation.valid) {
+      return res.status(400).json({ message: validation.error });
     }
 
+    if (!session_id) {
+      return res.status(400).json({ message: "session_id required" });
+    }
+
+    // Rate limiter
+    const health = getAgentHealth();
+    if (health.rate_limited) {
+      return res.status(429).json({
+        message: `Sistem sedang recovery dari rate limit. Coba lagi dalam ${health.cooldown_remaining} detik.`,
+        cooldown_seconds: health.cooldown_remaining,
+      });
+    }
     // SAVE USER MESSAGE
+
     await pool.query(
-      `INSERT INTO chat_messages (session_id,sender,content)
-       VALUES ($1,'user',$2)`,
+      `INSERT INTO chat_messages (session_id, sender, content)
+       VALUES ($1, 'user', $2)`,
       [session_id, message]
     );
 
-    // LOAD last 20 messages
-    const rawHistory = await pool.query(
-      `SELECT sender,content FROM chat_messages
-       WHERE session_id=$1 ORDER BY created_at DESC LIMIT 20`,
+    // AUTO RENAME (HANYA PESAN USER PERTAMA)
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM chat_messages
+       WHERE session_id = $1 AND sender = 'user'`,
       [session_id]
     );
 
-    const shortHistory = rawHistory.rows
+    if (Number(countResult.rows[0].count) === 1) {
+      const title =
+        message.length > 50
+          ? message.slice(0, 50) + "..."
+          : message;
+
+      await pool.query(
+        `UPDATE chat_sessions
+         SET title = $1
+         WHERE id = $2`,
+        [title, session_id]
+      );
+    }
+
+    // LOAD SHORT HISTORY
+
+    const historyResult = await pool.query(
+      `SELECT sender, content
+       FROM chat_messages
+       WHERE session_id = $1
+       ORDER BY created_at DESC
+       LIMIT 10`,
+      [session_id]
+    );
+
+    const chatHistory = historyResult.rows
       .reverse()
-      .map(m => `${m.sender === "user" ? "User" : "AI"}: ${m.content}`)
+      .map((m) => `${m.sender === "user" ? "User" : "AI"}: ${m.content}`)
       .join("\n");
 
-    const mem = await getLongTermMemory(userId);
+    // TICKET MODE
+    const ticketDetection = detectTicketRequest(message);
 
-    // ============================================================
-    // 🔍 MACHINE CONTEXT
-    // ============================================================
-    let machineInfo = "";
+    if (ticketDetection.isTicketRequest) {
+      const machineId = ticketDetection.machineId;
 
-    // detect machine number → "mesin 2", "machine 3"
-    const match = message.match(/(?:mesin|machine)\s*(\d+)/i);
+      const userNotes =
+        extractUserNotes(message) ||
+        message ||
+        "User tidak memberikan alasan";
 
-    // ============================================================
-    // FILTER: STATUS GLOBAL (CRITICAL / WARNING / NORMAL / ANOMALI)
-// ============================================================
-    if (/kritis|critical/i.test(message)) {
-      const q = await pool.query(`
-        SELECT DISTINCT ON(machine_id)
-          machine_id, failure_type, failure_probability
-        FROM prediction_logs
-        WHERE status='CRITICAL'
-        ORDER BY machine_id, created_at DESC;
-      `);
+      const created = await handleTicketCreation({
+        machineId,
+        userId,
+        userNotes,
+        conversationContext: chatHistory,
+      });
 
-      machineInfo =
-        q.rowCount > 0
-          ? "### Mesin Status CRITICAL\n\n" +
-            q.rows
-              .map(
-                m =>
-                  `• Mesin ${m.machine_id} → ${m.failure_type} (${(
-                    m.failure_probability * 100
-                  ).toFixed(1)}%)`
-              )
-              .join("\n")
-          : "### Tidak ada mesin CRITICAL";
-    } else if (/warning|waspada/i.test(message)) {
-      const q = await pool.query(`
-        SELECT DISTINCT ON(machine_id)
-          machine_id, failure_type, failure_probability
-        FROM prediction_logs
-        WHERE status='WARNING'
-        ORDER BY machine_id, created_at DESC;
-      `);
+      const ticketPayload = {
+        type: "ticket_confirmation",
+        ticket_number: created.ticket.ticketNumber,
+        machine_name: `Machine ${created.ticket.machineId}`,
+        status: created.ticket.status,
+        priority: created.ticket.priority,
+      };
 
-      machineInfo =
-        q.rowCount > 0
-          ? "### Mesin Status WARNING\n\n" +
-            q.rows
-              .map(
-                m =>
-                  `• Mesin ${m.machine_id} → ${m.failure_type} (${(
-                    m.failure_probability * 100
-                  ).toFixed(1)}%)`
-              )
-              .join("\n")
-          : "### Tidak ada mesin WARNING";
-    } else if (/normal/i.test(message)) {
-      const q = await pool.query(`
-        SELECT DISTINCT ON(machine_id)
-          machine_id, failure_probability
-        FROM prediction_logs
-        WHERE status='NORMAL'
-        ORDER BY machine_id, created_at DESC;
-      `);
 
-      machineInfo =
-        q.rowCount > 0
-          ? "### Mesin Status NORMAL\n\n" +
-            q.rows
-              .map(
-                m =>
-                  `• Mesin ${m.machine_id} (OK — ${(
-                    m.failure_probability * 100
-                  ).toFixed(1)}%)`
-              )
-              .join("\n")
-          : "### Tidak ada mesin NORMAL";
-    } else if (/anomali|anomaly/i.test(message)) {
-      const q = await pool.query(`
-        SELECT DISTINCT ON(machine_id)
-          machine_id, score
-        FROM anomaly_logs
-        WHERE is_anomaly=true
-        ORDER BY machine_id, created_at DESC;
-      `);
+      // simpan ke DB (JSON STRING)
+      await pool.query(
+        `INSERT INTO chat_messages (session_id, sender, content)
+   VALUES ($1, 'bot', $2)`,
+        [session_id, JSON.stringify(ticketPayload)]
+      );
 
-      machineInfo =
-        q.rowCount > 0
-          ? "### Mesin Dengan Anomali\n\n" +
-            q.rows
-              .map(
-                m => `• Mesin ${m.machine_id} → anomaly score ${m.score.toFixed(3)}`
-              )
-              .join("\n")
-          : "### Tidak ada mesin anomali";
+      // TOUCH SESSION
+      await pool.query(
+        `UPDATE chat_sessions
+   SET updated_at = NOW()
+   WHERE id = $1`,
+        [session_id]
+      );
+
+      // kirim ke frontend
+      return res.json({
+        reply: JSON.stringify(ticketPayload),
+      });
     }
 
-// ============================================================
-// 📈 TREND MODE (USER MINTA RIWAYAT / TREND)
-// ============================================================
-const isTrend = match && /trend|tren|history|riwayat|grafik|perubahan/i.test(message);
+    // NORMAL AI MODE
+    const result = await orchestrateChat(message, chatHistory);
 
-if (isTrend) {
-  machineInfo = await getTrendResponse(message, match); // ← FIX UTAMA
-}
-
-
-    // ============================================================
-    // SINGLE MACHINE SNAPSHOT (HANYA JIKA BUKAN TREND MODE)
-// ============================================================
-if (!isTrend && match && !machineInfo) {
-  const id = Number(match[1]);
-  machineInfo = await getMachineSnapshot(id); // ⬅ pakai file service baru
-}
-
-    // ============================================================
-    // SEMUA MESIN (SUMMARY)
-// ============================================================
-    if (!machineInfo && /semua mesin|status semua/i.test(message)) {
-      const all = await getAllLatestMachineData();
-      machineInfo =
-        `### Status Semua Mesin\n\n` +
-        all
-          .map(
-            m =>
-              `• Mesin ${m.machine_id} → Temp:${m.air_temperature}°C | RPM:${m.rotational_speed}`
-          )
-          .join("\n");
-    }
-
-    // ============================================================
-    // FINAL PROMPT
-    // ============================================================
-    const FINAL_PROMPT = buildChatPrompt(machineInfo, shortHistory, message);
-
-    // ============================================================
-    // PANGGIL AI
-    // ============================================================
-    let reply;
-    try {
-      reply = await chatToN8N(FINAL_PROMPT, userId);
-    } catch (err) {
-      console.error("N8N ERROR:", err);
-      reply = "⚠ Sistem AI tidak merespon. Coba lagi sebentar.";
-    }
-
-    if (!reply || typeof reply !== "string") {
-      reply = "⚠ AI tidak memberikan jawaban valid.";
-    }
-
-    reply = extractAndConvertJsonBlock(reply);
-    reply = ensureHeading(reply);
-
-    // SAVE BOT REPLY
     await pool.query(
-      `INSERT INTO chat_messages (session_id,sender,content)
-       VALUES ($1,'bot',$2)`,
-      [session_id, reply]
+      `INSERT INTO chat_messages (session_id, sender, content)
+       VALUES ($1, 'bot', $2)`,
+      [session_id, result.reply]
     );
 
+    // TOUCH SESSION
     await pool.query(
-      `UPDATE chat_sessions SET updated_at=NOW() WHERE id=$1`,
+      `UPDATE chat_sessions
+       SET updated_at = NOW()
+       WHERE id = $1`,
       [session_id]
     );
 
-    if (rawHistory.rowCount >= 20) {
-      await summarizeHistory(shortHistory, userId);
-    }
+    return res.json({
+      reply: result.reply,
+      metadata: {
+        method: result.method,
+        intent: result.intent,
+        processed_at: Date.now(),
+      },
+    });
 
-    res.json({ reply });
+  } catch (error) {
+    console.error("Send Message Error:", error);
 
-  } catch (e) {
-    console.error("CHAT_ERROR", e);
-    res.status(500).json({ message: "Gagal mengirim pesan" });
+    return res.status(500).json({
+      message: "Terjadi kesalahan sistem. Silakan coba lagi.",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };

@@ -1,4 +1,3 @@
-// src/controllers/auth/loginController.js
 import loginService from "../../services/auth/loginService.js";
 
 class LoginController {

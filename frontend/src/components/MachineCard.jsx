@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
+import { Activity, AlertTriangle, CheckCircle } from "lucide-react";
 import useCountUp from "../hooks/useCountUp";
-import LiveChart from "./LiveChart";
+import { useNavigate } from "react-router-dom";
 
 function MachineCard({
-  id,
   name,
   machine_id,
   status,
@@ -15,84 +15,126 @@ function MachineCard({
   torque,
   tool_wear,
   timestamp,
-  chartPoints = []
+  anomaly,
+  anomaly_score,
 }) {
+  const navigate = useNavigate();
+
   const [highlight, setHighlight] = useState(false);
-  const prev = useRef({ rotational_speed, torque, air_temperature, prediction, probability, status });
+  const prev = useRef({ status, prediction, probability });
 
-  const rpm = useCountUp(rotational_speed ?? 0, 500);
-  const torqueSm = useCountUp(torque ?? 0, 500);
+  const rpm = useCountUp(rotational_speed ?? 0, 400);
+  const torqueSmooth = useCountUp(torque ?? 0, 400);
 
-  // Overlay highlight saat data baru masuk 🔥
   useEffect(() => {
-    const curr = { rotational_speed, torque, air_temperature, prediction, probability, status };
+    const curr = { status, prediction, probability };
     if (JSON.stringify(prev.current) !== JSON.stringify(curr)) {
       setHighlight(true);
       const t = setTimeout(() => setHighlight(false), 300);
       prev.current = curr;
       return () => clearTimeout(t);
     }
-  }, [rotational_speed, torque, air_temperature, prediction, probability, status]);
-
+  }, [status, prediction, probability]);
 
   const statusStyle =
-    status === "CRITICAL" ? "bg-red-100 text-red-700 border-red-300" :
-    status === "WARNING"  ? "bg-yellow-100 text-yellow-700 border-yellow-300" :
-                            "bg-green-100 text-green-700 border-green-300";
+    status === "CRITICAL"
+      ? "border-red-400 bg-red-50 text-red-700"
+      : status === "WARNING"
+      ? "border-yellow-400 bg-yellow-50 text-yellow-700"
+      : "border-green-400 bg-green-50 text-green-700";
 
+  const statusLabel =
+    status === "CRITICAL"
+      ? "KRITIS"
+      : status === "WARNING"
+      ? "PERINGATAN"
+      : "NORMAL";
 
   return (
     <div
-      className={`p-4 bg-white rounded-xl border ${
-        highlight ? "ring-2 ring-indigo-300" : "border-gray-200"
-      } transition-all duration-200 shadow-sm hover:shadow-md`}
+      onClick={() => navigate(`/machine/${machine_id}`)}
+      className={`cursor-pointer w-full max-w-md border rounded-xl overflow-hidden
+        ${statusStyle}
+        ${highlight ? "ring-2 ring-indigo-300" : ""}
+        transition-all duration-200 hover:shadow-md`}
     >
+      {/* HEADER */}
+      <div className="px-3 py-2 flex justify-between items-center text-sm font-semibold">
+        <div className="flex items-center gap-2">
+          <Activity className="w-4 h-4" />
+          {name}
+        </div>
 
-      {/* Header */}
-      <div className="flex justify-between items-center mb-2">
-        <h3 className="text-md font-semibold">{name}</h3>
-
-        <span className={`px-2 py-1 text-xs font-medium rounded-full border ${statusStyle}`}>
-          {status}
+        <span className="text-xs font-bold">
+          {statusLabel}
         </span>
       </div>
 
-      {/* Prediction */}
-      <div className="mb-2 text-xs text-gray-500">Prediction</div>
-      <div className="mb-3">
-        {prediction ? (
-          <div className="flex items-baseline gap-2">
-            <div className="font-semibold text-gray-900 text-sm">{prediction}</div>
-            <div className="text-xs text-gray-500">({((probability ?? 0) * 100).toFixed(1)}%)</div>
+      {/* BODY */}
+      <div className="px-4 py-3 space-y-3 text-sm bg-white">
+
+        {/* PREDIKSI */}
+        <div>
+          <p className="text-gray-500 text-xs mb-1">Prediksi Terakhir</p>
+          {prediction ? (
+            <div className="flex items-center gap-2">
+              {status === "CRITICAL" ? (
+                <AlertTriangle className="w-4 h-4 text-red-600" />
+              ) : (
+                <CheckCircle className="w-4 h-4 text-green-600" />
+              )}
+              <span className="font-semibold text-gray-800">
+                {prediction}
+              </span>
+              <span className="text-xs text-gray-500">
+                ({((probability ?? 0) * 100).toFixed(1)}%)
+              </span>
+            </div>
+          ) : (
+            <p className="italic text-gray-400 text-xs">
+              Belum ada prediksi
+            </p>
+          )}
+        </div>
+
+        {/* ANOMALI */}
+        {anomaly === 1 && (
+          <div className="p-2 rounded-md bg-orange-50 border border-orange-300">
+            <p className="text-xs font-semibold text-orange-700">
+              ⚠ Anomali Terdeteksi
+            </p>
+            <p className="text-[11px] text-orange-600">
+              Skor Anomali: {anomaly_score?.toFixed(4)}
+            </p>
           </div>
-        ) : (
-          <div className="text-xs text-gray-400 italic">No prediction</div>
         )}
+
+        {/* SENSOR */}
+        <div>
+          <p className="text-gray-500 text-xs mb-1">Data Sensor</p>
+          <div className="grid grid-cols-2 gap-y-1 text-gray-800">
+            <Info label="Air Temp" value={`${air_temperature} °K`} />
+            <Info label="Process Temp" value={`${process_temperature} °K`} />
+            <Info label="RPM" value={Math.round(rpm)} />
+            <Info label="Torque" value={`${torqueSmooth.toFixed(1)} Nm`} />
+            <Info label="Tool Wear" value={`${tool_wear ?? "-"} min`} />
+            <Info
+              label="Update"
+              value={timestamp ? new Date(timestamp).toLocaleTimeString("id-ID") : "-"}
+            />
+          </div>
+        </div>
       </div>
-
-      {/* Grid Info */}
-      <div className="grid grid-cols-2 gap-1 text-sm mb-3">
-
-        <Info label="Air Temp" value={`${air_temperature}°C`} />
-        <Info label="Process Temp" value={`${process_temperature}°C`} />
-        <Info label="RPM" value={Math.round(rpm)} />
-        <Info label="Torque" value={`${torqueSm.toFixed(1)} Nm`} />
-        <Info label="Wear" value={`${tool_wear ?? "-"} min`} />
-        <Info label="Updated" value={timestamp ? new Date(timestamp).toLocaleTimeString() : "-"} />
-      </div>
-
-      {/* 🔥 LIVE MINI CHART */}
-      <LiveChart points={chartPoints} label="RPM" status={status} />
     </div>
   );
 }
 
 function Info({ label, value }) {
   return (
-    <div>
-      <div className="text-[10px] text-gray-500">{label}</div>
-      <div className="text-[13px] text-gray-900">{value}</div>
-    </div>
+    <>
+      <span className="text-gray-500 text-xs">{label}</span>
+      <span className="text-sm">{value}</span>
+    </>
   );
 }
 

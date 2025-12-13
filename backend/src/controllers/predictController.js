@@ -54,22 +54,72 @@ export const getLatestPredictionPerMachine = async (req, res) => {
 };
 
 export const getPredictionHistoryByMachine = async (req, res) => {
-  const id = Number(req.params.id);
-  const range = req.query.range || "ALL";
-  const status = req.query.status || "ALL";
+  try {
+    const machineId = Number(req.params.id);
 
-  let filter = "";
-  if (range === "1h") filter += " AND created_at >= NOW() - INTERVAL '1 hour'";
-  if (range === "24h") filter += " AND created_at >= NOW() - INTERVAL '1 day'";
-  if (range === "7d") filter += " AND created_at >= NOW() - INTERVAL '7 days'";
-  if (status !== "ALL") filter += ` AND status='${status}'`;
+    const {
+      range = "ALL",
+      status = "ALL",
+      page = 1,
+      limit = 12,
+    } = req.query;
 
-  const r = await pool.query(
-    `SELECT * FROM prediction_logs WHERE machine_id=$1 ${filter} ORDER BY created_at DESC LIMIT 200`,
-    [id]
-  );
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const offset = (pageNum - 1) * limitNum;
 
-  res.json({ data: r.rows });
+    const filters = [`machine_id = $1`];
+    const values = [machineId];
+
+    // RANGE FILTER
+    if (range === "1h") filters.push(`created_at >= NOW() - INTERVAL '1 hour'`);
+    if (range === "24h") filters.push(`created_at >= NOW() - INTERVAL '1 day'`);
+    if (range === "7d") filters.push(`created_at >= NOW() - INTERVAL '7 days'`);
+
+    // STATUS FILTER
+    if (status !== "ALL") {
+      values.push(status);
+      filters.push(`status = $${values.length}`);
+    }
+
+    const where = `WHERE ${filters.join(" AND ")}`;
+
+    // TOTAL COUNT
+    const countQuery = `
+      SELECT COUNT(*)::int AS total
+      FROM prediction_logs
+      ${where}
+    `;
+
+    const dataQuery = `
+      SELECT *
+      FROM prediction_logs
+      ${where}
+      ORDER BY created_at DESC
+      LIMIT $${values.length + 1}
+      OFFSET $${values.length + 2}
+    `;
+
+    const [countRes, dataRes] = await Promise.all([
+      pool.query(countQuery, values),
+      pool.query(dataQuery, [...values, limitNum, offset]),
+    ]);
+
+    const total = countRes.rows[0].total;
+    const totalPages = Math.ceil(total / limitNum);
+
+    res.json({
+      data: dataRes.rows,
+      page: pageNum,
+      limit: limitNum,
+      total,
+      totalPages,
+    });
+
+  } catch (err) {
+    console.error("[PREDICTION_HISTORY_ERROR]", err);
+    res.status(500).json({ error: "Gagal mengambil prediction history" });
+  }
 };
 
 export const getMachineByStatus = async (req, res) => {

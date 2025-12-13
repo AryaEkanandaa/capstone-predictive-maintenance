@@ -6,6 +6,8 @@ import { pool } from "./src/db/db.js";
 import sensorService from "./src/services/sensor/sensorService.js";
 import { autoPredictAllMachines } from "./src/services/prediction/autoPredictionService.js";
 import { autoAnomalyMonitor } from "./src/services/anomaly/anomalyService.js";
+import { startAutoTicketCron } from "./src/jobs/autoTicketCreation.js";
+
 
 import http from "http";
 import { Server as IOServer } from "socket.io";
@@ -15,7 +17,6 @@ import jwtConfig from "./src/config/jwt.js";
 
 const PORT = process.env.PORT || 5000;
 
-console.log("GEMINI KEY:", process.env.GEMINI_API_KEY);
 
 async function startServer() {
   try {
@@ -61,10 +62,11 @@ async function startServer() {
 
     server.listen(PORT, () => {
       console.log(`Server running at http://localhost:${PORT}`);
+      startAutoTicketCron();
     });
 
     // Sensor auto generator
-    const SENSOR_INTERVAL = Number(process.env.SENSOR_INTERVAL_MS) || 3000;
+    const SENSOR_INTERVAL = Number(process.env.SENSOR_INTERVAL_MS) || 10000;
     setInterval(async () => {
       try {
         const inserted = await sensorService.autoGenerateAllMachines();
@@ -75,7 +77,7 @@ async function startServer() {
     }, SENSOR_INTERVAL);
 
     // Auto prediction worker
-    const PREDICT_INTERVAL = Number(process.env.PREDICT_INTERVAL_MS) || 5000;
+    const PREDICT_INTERVAL = Number(process.env.PREDICT_INTERVAL_MS) || 10000;
     console.log(`Prediction worker active every ${PREDICT_INTERVAL} ms`);
 
     setInterval(async () => {
@@ -90,7 +92,7 @@ async function startServer() {
     }, PREDICT_INTERVAL);
 
     // Auto anomaly monitor worker
-    const ANOMALY_INTERVAL = Number(process.env.ANOMALY_INTERVAL_MS) || 5000;
+    const ANOMALY_INTERVAL = Number(process.env.ANOMALY_INTERVAL_MS) || 10000;
     console.log(`Anomaly monitor active every ${ANOMALY_INTERVAL} ms`);
 
     setInterval(async () => {

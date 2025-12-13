@@ -3,7 +3,7 @@ import {
   getPredictionHistory,
   getLatestPredictionPerMachine,
   getPredictionHistoryByMachine,
-  getMachineByStatus  // ⬅ TAMBAHKAN INI
+  getMachineByStatus
 } from "../controllers/predictController.js";
 import { verifyAuth } from "../middlewares/verifyAuth.js";
 import { pool } from "../db/db.js";
@@ -14,10 +14,8 @@ router.get("/history", verifyAuth, getPredictionHistory);
 router.get("/latest-by-machine", verifyAuth, getLatestPredictionPerMachine);
 router.get("/history-by-machine/:id", verifyAuth, getPredictionHistoryByMachine);
 
-// 🔥 Tambahkan endpoint status mesin
 router.get("/status/:status", verifyAuth, getMachineByStatus);
 
-/** Save log dari realtime frontend (NO DOUBLE) */
 router.post("/log/save", verifyAuth, async (req,res)=> {
   const { machine_id, failure_type, failure_probability, status } = req.body;
 

@@ -1,4 +1,4 @@
-// Mockup Database Pengguna
+
 const users = [];
 
 exports.findUserByEmail = (email) => {

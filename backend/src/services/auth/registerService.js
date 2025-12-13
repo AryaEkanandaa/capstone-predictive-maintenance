@@ -1,4 +1,3 @@
-// src/services/auth/registerService.js
 import { pool } from "../../db/db.js";
 import bcrypt from "bcryptjs";
 

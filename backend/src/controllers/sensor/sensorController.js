@@ -41,7 +41,7 @@ const getHistory = async (req, res, next) => {
 const getTrend = async (req, res, next) => {
   try {
     const { machine_id } = req.params;
-    const range = req.query.range || "24h"; // default 24 jam
+    const range = req.query.range || "24h";
 
     const trend = await sensorService.getMachineTrend(machine_id, range);
 

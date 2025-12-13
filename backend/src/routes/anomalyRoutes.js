@@ -1,12 +1,15 @@
 import express from "express";
-import { detectAnomaly, getAnomalyMachines } from "../controllers/anomalyController.js";
 import { verifyAuth } from "../middlewares/verifyAuth.js";
+import {
+  detectAnomaly,
+  getLatestAnomalyPerMachine,
+  getAnomalyHistory
+} from "../controllers/anomalyController.js";
 
 const router = express.Router();
 
 router.post("/", verifyAuth, detectAnomaly);
-
-// 🔥 Tambahkan endpoint baru
-router.get("/machines", verifyAuth, getAnomalyMachines);
+router.get("/latest", verifyAuth, getLatestAnomalyPerMachine);
+router.get("/history", verifyAuth, getAnomalyHistory);
 
 export default router;

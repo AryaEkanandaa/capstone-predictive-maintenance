@@ -1,30 +1,77 @@
+import { AlertTriangle, CheckCircle, Activity } from "lucide-react";
+
 export default function PredictionCard({
   machine_name,
   prediction_text,
   prediction_date,
-  status
+  status,
 }) {
-  const color =
-    status === "CRITICAL"
-      ? "bg-red-100 text-red-700 border-red-300"
-      : status === "WARNING"
-      ? "bg-yellow-100 text-yellow-700 border-yellow-300"
-      : "bg-green-100 text-green-700 border-green-300";
+  const isCritical = status === "CRITICAL";
+  const isWarning = status === "WARNING";
+
+  const statusStyle = isCritical
+    ? "border-red-400 bg-red-50 text-red-700"
+    : isWarning
+    ? "border-yellow-400 bg-yellow-50 text-yellow-700"
+    : "border-green-400 bg-green-50 text-green-700";
+
+  const statusLabel = isCritical
+    ? "KRITIS"
+    : isWarning
+    ? "PERINGATAN"
+    : "NORMAL";
 
   return (
-    <div className="p-5 bg-white shadow rounded-xl border border-gray-200 hover:shadow-md transition">
-      <div className="flex justify-between items-center mb-2">
-        <h3 className="font-semibold text-gray-900">{machine_name}</h3>
-        <span className={`px-3 py-1 text-xs font-medium rounded-full border ${color}`}>
-          {status}
-        </span>
+    <div
+      className={`w-full max-w-md border rounded-xl overflow-hidden ${statusStyle}`}
+    >
+      {/* HEADER */}
+      <div className="px-3 py-2 flex items-center gap-2 text-sm font-semibold">
+        <Activity className="w-4 h-4" />
+        Hasil Prediksi Mesin
       </div>
 
-      <p className="text-gray-700 mb-2">{prediction_text}</p>
+      {/* BODY */}
+      <div className="px-4 py-3 space-y-3 text-sm bg-white">
 
-      <p className="text-gray-400 text-xs">
-        {new Date(prediction_date).toLocaleString()}
-      </p>
+        {/* MACHINE */}
+        <div>
+          <p className="text-gray-500 text-xs">Mesin</p>
+          <p className="font-semibold text-gray-800">
+            {machine_name}
+          </p>
+        </div>
+
+        {/* STATUS */}
+        <div className="flex items-center gap-2">
+          {isCritical ? (
+            <AlertTriangle className="w-4 h-4 text-red-600" />
+          ) : (
+            <CheckCircle className="w-4 h-4 text-green-600" />
+          )}
+          <span className="font-semibold">
+            Status: {statusLabel}
+          </span>
+        </div>
+
+        {/* PREDICTION TEXT */}
+        <div>
+          <p className="text-gray-500 text-xs mb-1">
+            Ringkasan Prediksi
+          </p>
+          <p className="text-gray-800 leading-relaxed">
+            {prediction_text}
+          </p>
+        </div>
+
+        {/* TIME */}
+        <div>
+          <p className="text-gray-500 text-xs">Waktu Prediksi</p>
+          <p>
+            {new Date(prediction_date).toLocaleString("id-ID")}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,10 +1,6 @@
-// backend/src/services/prediction/autoPredictionService.js
 import { pool } from "../../db/db.js";
 import { runFailurePrediction, savePrediction, mapStatus } from "./predictionService.js";
 
-/**
- * Auto predict for all machines - can be scheduled (cron / setInterval)
- */
 export async function autoPredictAllMachines() {
   try {
     const latestSensor = await pool.query(`

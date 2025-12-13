@@ -4,22 +4,37 @@ import { Outlet, useLocation } from "react-router-dom";
 
 export default function MainLayout() {
   const { pathname } = useLocation();
-  const isChatbot = pathname === "/chatbot"; // deteksi
+  
+  // ✅ Chatbot has special layout (no navbar, full height)
+  const isChatbot = pathname.startsWith("/chatbot");
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
+    <div className="flex h-screen overflow-hidden bg-gray-100">
       
-      <Sidebar />  {/* Tetap ada di chatbot */}
+      {/* 🌐 GLOBAL SIDEBAR - Always visible */}
+      <Sidebar />
 
-      <div className="flex-1 flex flex-col">
+      {/* ✅ RIGHT SIDE - Dynamic based on route */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-        {!isChatbot && <Navbar />}   {/* Navbar hilang khusus chatbot */}
-        
-        <div className={`flex-1 ${isChatbot ? "p-0" : "p-6"}`}>
-          <div className={`${isChatbot ? "w-full" : "max-w-7xl mx-auto w-full"}`}>
+        {/* 🧭 Navbar - Hidden di chatbot */}
+        {!isChatbot && <Navbar />}
+
+        {/* 🔥 Content Area */}
+        {isChatbot ? (
+          // ✅ CHATBOT: Full height, no padding
+          <div className="flex-1 overflow-hidden">
             <Outlet />
           </div>
-        </div>
+        ) : (
+          // ✅ OTHER PAGES: With padding and max-width
+          <div className="flex-1 overflow-y-auto p-6">
+            <div className="max-w-7xl mx-auto w-full">
+              <Outlet />
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

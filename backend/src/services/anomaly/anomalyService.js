@@ -1,10 +1,6 @@
-// backend/src/services/anomaly/anomalyService.js
 import fetch from "node-fetch";
 import { pool } from "../../db/db.js";
 
-/**
- * Save anomaly result into DB with consistent columns (same as autoAnomalyService).
- */
 export async function saveAnomaly({
   machine_id = null,
   type = "M",
@@ -42,11 +38,8 @@ export async function saveAnomaly({
   return r.rows[0];
 }
 
-/**
- * Call ML anomaly endpoint and return structured result (do not persist here).
- */
 export async function runAnomalyDetection(payload) {
-  const mlUrl = process.env.ML_ANOMALY_URL || "http://localhost:8001/anomaly";
+const mlUrl = process.env.ML_ANOMALY_URL ?? "http://localhost:8001/anomaly";
 
   const response = await fetch(mlUrl, {
     method: "POST",
@@ -63,12 +56,20 @@ export async function runAnomalyDetection(payload) {
   }
 
   // normalize expected fields
-  return {
-    is_anomaly: data.is_anomaly ?? false,
-    score: data.score ?? null,
-    status: data.status ?? (data.is_anomaly ? "WARNING" : "NORMAL"),
-    raw: data,
-  };
+const score = data.score ?? 0;
+
+// NORMAL isolation forest rule:
+// score < 0  → normal
+// score > 0  → anomaly
+const isAnomaly = score > 0;
+
+return {
+  is_anomaly: isAnomaly,
+  score,
+  status: isAnomaly ? "WARNING" : "NORMAL",
+  raw: data,
+};
+
 }
 
 /**
@@ -135,7 +136,7 @@ export async function autoAnomalyMonitor() {
           raw: result.raw,
         });
 
-        globalThis._io?.emit("anomaly_update", {
+        globalThis._io?.emit("anomaly:update", {
           machine_id: m.machine_id,
           is_anomaly: saved.is_anomaly,
           score: saved.score,

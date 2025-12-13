@@ -17,15 +17,18 @@ class LoginService {
       id: user.id,
       full_name: user.full_name,
       username: user.username,
-      email: user.email
+      email: user.email,
+      role: user.role
     });
 
     const refreshToken = generateRefreshToken({
       id: user.id,
       full_name: user.full_name,
       username: user.username,
-      email: user.email
+      email: user.email,
+      role: user.role
     });
+
 
     const hashed = hashToken(refreshToken);
 

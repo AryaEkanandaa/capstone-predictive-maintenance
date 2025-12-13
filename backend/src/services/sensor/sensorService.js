@@ -108,11 +108,20 @@ export const getSensorHistory = async ({ page = 1, limit = 200, date_from, date_
   }
 
   if (range) {
-    const map = { "1h": "1 hour", "24h": "1 day", "7d": "7 days", "30d": "30 days" };
+    const map = {
+      "10m": "10 minutes",
+      "30m": "30 minutes",
+      "1h": "1 hour",
+      "6h": "6 hours",
+      "24h": "1 day",
+      "7d": "7 days",
+    };
+
     if (map[range]) {
       filters.push(`created_at >= NOW() - INTERVAL '${map[range]}'`);
     }
   }
+
 
   const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
 
@@ -157,7 +166,6 @@ export const getPreviousSensorReading = async (machine_id) => {
 
 export const getMachineTrend = async (machine_id, range = "24h") => {
 
-  // SUPPORT: Xm, Xh, Xd → 5m, 30m, 1h, 12h, 7d, 30d
   if (!/^\d+(m|h|d)$/i.test(range)) {
     throw new Error("Invalid range. Format valid: Xm / Xh / Xd  → contoh: 5m, 30m, 2h, 1d, 7d");
   }
