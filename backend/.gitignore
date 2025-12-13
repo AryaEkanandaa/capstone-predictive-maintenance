@@ -1,0 +1,34 @@
+# =====================
+# ENVIRONMENT VARIABLES
+# =====================
+.env
+.env.*
+backend/.env
+frontend/.env
+
+# =====================
+# NODE
+# =====================
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# =====================
+# PYTHON
+# =====================
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# =====================
+# BUILD / CACHE
+# =====================
+dist/
+build/
+
+# =====================
+# OS
+# =====================
+.DS_Store
+Thumbs.db
